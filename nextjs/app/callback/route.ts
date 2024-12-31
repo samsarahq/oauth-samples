@@ -43,5 +43,4 @@ export async function GET(request: Request) {
 
   // Return access token to UI
   return new Response(`Access Token: ${access_token}`)
-
 } 

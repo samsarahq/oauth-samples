@@ -1,16 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Flask</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>Welcome</h1>
-        <p></p>
-        <a href="https://api.samsara.com/oauth2/authorize?client_id={{ client_id }}&state={{ state }}&response_type=code&redirect_uri=http://localhost:5000/callback">Connect to Samsara</a>
-    </div>
+  <div class="container">
+    <h1>Welcome to Example Application</h1>
+
+    {% if access_token %}
+      <p>Access Token: {{ access_token }}</p>
+
+    {% endif %}
+    {% if refresh_token %}
+      <p>Refresh Token: {{ refresh_token }}</p>
+
+      <a href="/vehicles">Vehicles</a>
+      <a href="/revoke">Revoke Access Token</a>
+      <a href="/refresh">Refresh Access Token</a>
+    {% endif %}
+
+    <a href="https://api.samsara.com/oauth2/authorize?client_id={{ client_id }}&state={{ state }}&response_type=code&redirect_uri=http://localhost:5000/callback">Connect to Samsara</a>
+  </div>
 </body>
-</html> 
+</html>

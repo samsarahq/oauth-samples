@@ -91,4 +91,4 @@ get '/callback' do
   else
     "Error: No authorization code received"
   end
-end 
+end

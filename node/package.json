@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "node-fetch": "^3.3.2"
+  }
+}

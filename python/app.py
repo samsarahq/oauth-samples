@@ -118,6 +118,30 @@ def callback():
         return f"Authorization failed: {error} - {error_description}", 400
 
 
+# Step 4: Use the access token to make an API call
+@app.get('/me')
+def me():
+    """Example showing how to use the access token to make an API call."""
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT access_token FROM demo')
+    result = cursor.fetchone()
+    access_token = result['access_token']
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    response = requests.get('https://api.samsara.com/me', headers=headers)
+    response.raise_for_status()
+
+    # If the access token is expired, try refreshing it and then making the API call again.
+
+    return response.json()
+
+
 # Step 5: Refresh tokens when they expire.
 @app.get('/auth/refresh')
 def refresh():
@@ -152,6 +176,8 @@ def refresh():
 
 @app.get('/auth/revoke')
 def revoke():
+    """Enable users to disconnect your Marketplace app from their Samsara account."""
+
     db = get_db()
     cursor = db.cursor()
     cursor.execute('SELECT refresh_token FROM demo')
@@ -178,30 +204,7 @@ def revoke():
     return "Refresh token not found", 404
 
 
-# Step 4: Use the access token to make an API call
-@app.get('/me')
-def me():
-    """Example showing how to use the access token to make an API call."""
-
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute('SELECT access_token FROM demo')
-    result = cursor.fetchone()
-    access_token = result['access_token']
-
-    headers = {
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json'
-    }
-
-    response = requests.get('https://api.samsara.com/me', headers=headers)
-    response.raise_for_status()
-
-    # If the access token is expired, try refreshing it and then making the API call again.
-
-    return response.json()
-
-
+# Helper functions
 def get_db():
     """Create a new database connection for each request"""
     db = getattr(g, '_database', None)

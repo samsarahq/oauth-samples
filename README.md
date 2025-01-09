@@ -16,7 +16,7 @@ We'll use local `.env` files to store the OAuth Client ID and OAuth Client Secre
 cp .env.example .env
 ```
 
-Be sure to store access tokens and refresh tokens securely. These examples store the user's credentials in a local SQLite database for simplicity of the demo..
+Be sure to store access tokens and refresh tokens securely. These examples store credentials in a local SQLite database for simplicity of the demo.
 
 ### Overview
 
@@ -36,12 +36,6 @@ These examples show how you might implement these features of a marketplace app:
 Each example has its own README file with instructions for installing dependencies and running the example.
 
 - [Python](python/README.md)
-- [Node.js](node/README.md)
-- [Java](java/README.md)
-- [PHP](php/README.md)
-- [Ruby](ruby/README.md)
-- [Go](go/README.md)
-- [Next.js](nextjs/README.md)
 
 ## Support
 

@@ -42,9 +42,8 @@ def home():
           <a href="/auth/samsara">Connect to Samsara</a><br /><br />
 
           <a href="/me">Test API Call</a><br>
-          <a href="/auth/revoke">Revoke Access Token</a><br>
           <a href="/auth/refresh">Refresh Access Token</a><br>
-
+          <a href="/auth/revoke">Revoke Access Token</a><br>
         </body>
       </html>
     '''.format(access_token=access_token)
@@ -162,13 +161,19 @@ def refresh():
         auth=(SAMSARA_CLIENT_ID, SAMSARA_CLIENT_SECRET)
     )
 
-    response.raise_for_status()
     token_data = response.json()
+
+    # Check if token refresh was successful
+    if 'access_token' not in token_data:
+        error = token_data.get('error', 'Unknown error')
+        error_description = token_data.get('error_description', 'No error description provided')
+        return f"Failed to refresh token: {error} - {error_description}", 400
+
     access_token = token_data.get('access_token')
-    refresh_token = token_data.get('refresh_token')
+    new_refresh_token = token_data.get('refresh_token')
 
     # Store the new access token and refresh token in the database
-    cursor.execute('UPDATE demo SET access_token = ?, refresh_token = ? WHERE refresh_token = ?', (access_token, refresh_token, refresh_token))
+    cursor.execute('UPDATE demo SET access_token = ?, refresh_token = ? WHERE refresh_token = ?', (access_token, new_refresh_token, refresh_token))
     db.commit()
 
     return redirect(url_for('home'))
@@ -194,7 +199,7 @@ def revoke():
 
         if revoke_response.status_code == 200:
             # Delete tokens from database
-            cursor.execute('DELETE FROM demo WHERE refresh_token = ?', (refresh_token,))
+            cursor.execute('DELETE FROM demo')
             db.commit()
 
             return "Access token and refresh token revoked successfully"
@@ -225,7 +230,8 @@ def init_db():
     with app.app_context():
         db = get_db()
         cursor = db.cursor()
-        cursor.execute('''CREATE TABLE IF NOT EXISTS demo (
+        cursor.execute('DROP TABLE IF EXISTS demo')
+        cursor.execute('''CREATE TABLE demo (
             access_token TEXT,
             refresh_token TEXT
         )''')

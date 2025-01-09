@@ -12,10 +12,17 @@ This example shows how to implement OAuth 2.0 authorization flow with the Samsar
 
 1. Clone this repository
 
-2. Create a `.env` file in the root directory with your OAuth 2.0 credentials:
+2. Create a `.env` file in the root directory.
 
 ```sh
 cp .env.example .env
+```
+
+Then populate with your OAuth 2.0 credentials:
+
+```sh
+SAMSARA_CLIENT_ID=your_client_id
+SAMSARA_CLIENT_SECRET=your_client_secret
 ```
 
 3. Install dependencies:
@@ -30,7 +37,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-5. Navigate to `http://localhost:5000` in your browser to see the application in action.
+5. Navigate to [`http://localhost:5000`](http://localhost:5000) in your browser to see the application in action.
 
 ## Support
 

@@ -8,13 +8,15 @@ This repository contains examples for authenticating to Samsara's APIs using OAu
 
 ### Prerequisites
 
-To get started, you'll need the OAuth Client ID and OAuth Client Secret for a Samsara app which you can create from the Samsara Dashboard. **Settings** > **OAuth 2.0 Apps** > **Create App**
+To get started, you'll need the OAuth Client ID and OAuth Client Secret for a Samsara app which you can create from the Samsara Dashboard. **Settings** > **OAuth 2.0 Apps** > **Create new app**
 
 We'll use local `.env` files to store the OAuth Client ID and OAuth Client Secret and load them as environment variables. Each example has its own `.env.example` file that you can copy and rename to `.env` and populate with your OAuth Client ID and OAuth Client Secret.
 
 ```sh
 cp .env.example .env
 ```
+
+Be sure to store access tokens and refresh tokens securely. These examples store the user's credentials in a local SQLite database for simplicity of the demo..
 
 ### Overview
 

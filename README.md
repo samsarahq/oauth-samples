@@ -27,10 +27,19 @@ These examples show how you might implement these features of a marketplace app:
 - `GET /auth/samsara/callback` - Handles the callback from Samsara's OAuth 2.0 authorization flow.
 - `GET /auth/samsara/refresh` - Refreshes the access token.
 - `GET /auth/samsara/revoke` - Revokes the access token.
+- `GET /me` - A test API call that returns the current user's Org account information. Note: To access this endpoint your OAuth 2.0 application must have the `Read Org Information` scope under `Setup & Administration` when configuring the app.
 
 ### How to run the examples
 
 Each example has its own README file with instructions for installing dependencies and running the example.
+
+- [Python](python/README.md)
+- [Node.js](node/README.md)
+- [Java](java/README.md)
+- [PHP](php/README.md)
+- [Ruby](ruby/README.md)
+- [Go](go/README.md)
+- [Next.js](nextjs/README.md)
 
 ## Support
 

@@ -42,8 +42,8 @@ def home():
           <a href="/auth/samsara">Connect to Samsara</a><br /><br />
 
           <a href="/me">Test API Call</a><br>
-          <a href="/auth/refresh">Refresh Access Token</a><br>
-          <a href="/auth/revoke">Revoke Access Token</a><br>
+          <a href="/auth/samsara/refresh">Refresh Access Token</a><br>
+          <a href="/auth/samsara/revoke">Revoke Access Token</a><br>
         </body>
       </html>
     '''.format(access_token=access_token)
@@ -94,7 +94,6 @@ def callback():
                 },
                 auth=(SAMSARA_CLIENT_ID, SAMSARA_CLIENT_SECRET)
             )
-            response.raise_for_status()
 
             token_data = response.json()
             access_token = token_data.get('access_token')
@@ -142,7 +141,7 @@ def me():
 
 
 # Step 5: Refresh tokens when they expire.
-@app.get('/auth/refresh')
+@app.get('/auth/samsara/refresh')
 def refresh():
     # Get the access token and refresh token from the database
     db = get_db()
@@ -179,7 +178,7 @@ def refresh():
     return redirect(url_for('home'))
 
 
-@app.get('/auth/revoke')
+@app.get('/auth/samsara/revoke')
 def revoke():
     """Enable users to disconnect your Marketplace app from their Samsara account."""
 

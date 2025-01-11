@@ -36,6 +36,9 @@ These examples show how you might implement these features of a marketplace app:
 Each example has its own README file with instructions for installing dependencies and running the example.
 
 - [Python](python/README.md)
+- [Go](go/README.md)
+- [Node](node/README.md)
+- [Ruby](ruby/README.md)
 
 ## Support
 

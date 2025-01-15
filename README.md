@@ -40,6 +40,7 @@ Each example has its own README file with instructions for installing dependenci
 - [Node](node/README.md)
 - [Ruby](ruby/README.md)
 - [.NET](dotnet/README.md)
+- [Java](java/README.md)
 
 ## Support
 

@@ -12,7 +12,6 @@ $_SESSION['oauth_state'] = $state;
 // Log the state parameter for debugging
 error_log('OAuth state parameter: ' . $state);
 
-
 // Build authorization URL
 $params = [
     'client_id' => $_ENV['SAMSARA_CLIENT_ID'],

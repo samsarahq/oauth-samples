@@ -1,24 +1,14 @@
 <?php
 require __DIR__ . '/../vendor/autoload.php';
 
-// Find or create new SQLite database
-$db = new SQLite3(__DIR__ . '/../demo.db');
+session_start();
 
-// Find or create demo table with access_token and refresh_token columns
-$db->exec('
-    CREATE TABLE IF NOT EXISTS demo (
-        access_token TEXT,
-        refresh_token TEXT
-    )
-');
+// Get credentials from session
+$credentials = $_SESSION['credentials'] ?? null;
 
-// Get access token from database
-$result = $db->query('SELECT access_token FROM demo');
-$row = $result->fetchArray(SQLITE3_ASSOC);
-
-// Get access token from database
-if ($row && isset($row['access_token'])) {
-    $access_token = $row['access_token'];
+// Get access token from credentials
+if ($credentials && isset($credentials['access_token'])) {
+    $access_token = $credentials['access_token'];
 } else {
     $access_token = 'Access token not found';
 }

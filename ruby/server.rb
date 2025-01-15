@@ -1,25 +1,47 @@
-require 'byebug'
 require 'sinatra'
 require 'dotenv/load'
 require 'net/http'
 require 'json'
 require 'securerandom'
-require 'sqlite3'
-require 'base64'
 
 # Set a secret key for session encryption
 set :session_secret, ENV['SESSION_SECRET'] || SecureRandom.hex(32)
 enable :sessions
 set :port, 5000
 
+
+def refresh_tokens(refresh_token)
+  auth = Base64.strict_encode64("#{ENV['SAMSARA_CLIENT_ID']}:#{ENV['SAMSARA_CLIENT_SECRET']}")
+  uri = URI('https://api.samsara.com/oauth2/token')
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = true
+
+  request = Net::HTTP::Post.new(uri)
+  request['Content-Type'] = 'application/x-www-form-urlencoded'
+  request['Authorization'] = "Basic #{auth}"
+  request.body = URI.encode_www_form({
+    refresh_token: refresh_token,
+    grant_type: 'refresh_token'
+  })
+
+  response = http.request(request)
+  token_data = JSON.parse(response.body)
+
+  # Calculate new expires_at timestamp
+  expires_at = Time.now.to_i + token_data['expires_in'].to_i
+
+  {
+    'access_token' => token_data['access_token'],
+    'refresh_token' => token_data['refresh_token'],
+    'expires_at' => expires_at
+  }
+end
+
+
 # Landing page with welcome message and button
 get '/' do
-  db = get_db
-  result = db.execute('SELECT access_token, refresh_token FROM demo').first
-  access_token = 'No access token stored locally.'
-  if result
-    access_token = result['access_token']
-  end
+  credentials = session[:credentials] || {}
+  access_token = credentials['access_token'] || 'No access token stored locally.'
 
   <<~HTML
     <html>
@@ -64,7 +86,6 @@ get '/auth/samsara/callback' do
   if params[:code]
     auth = Base64.strict_encode64("#{ENV['SAMSARA_CLIENT_ID']}:#{ENV['SAMSARA_CLIENT_SECRET']}")
 
-    # Step 3: Exchange the authorization code for an access token
     uri = URI('https://api.samsara.com/oauth2/token')
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
@@ -81,9 +102,17 @@ get '/auth/samsara/callback' do
 
     if response.code == '200'
       token_data = JSON.parse(response.body)
-      db = get_db
-      db.execute('INSERT INTO demo (access_token, refresh_token) VALUES (?, ?)', [token_data['access_token'], token_data['refresh_token']])
-      "Successfully connected to Samsara! #{token_data['access_token']}"
+
+      # Calculate expires_at timestamp
+      expires_at = Time.now.to_i + token_data['expires_in'].to_i
+
+      # Store credentials in session
+      session[:credentials] = {
+        'access_token' => token_data['access_token'],
+        'refresh_token' => token_data['refresh_token'],
+        'expires_at' => expires_at
+      }
+
       redirect '/'
     else
       "Error obtaining access token: #{response.body}"
@@ -95,58 +124,43 @@ end
 
 # Step 4: Use the access token to make an API call
 get '/me' do
-  db = get_db
-  result = db.execute('SELECT access_token FROM demo').first
-  access_token = result['access_token']
+  credentials = session[:credentials]
+  return "No access token stored" unless credentials
+
+  # Check if access token is expired and refresh if needed
+  if credentials['expires_at'] < Time.now.to_i
+    # Refresh the token and update session
+    credentials = refresh_tokens(credentials['refresh_token'])
+    session[:credentials] = credentials
+  end
 
   uri = URI('https://api.samsara.com/me')
   http = Net::HTTP.new(uri.host, uri.port)
   http.use_ssl = true
 
   request = Net::HTTP::Get.new(uri)
-  request['Authorization'] = "Bearer #{access_token}"
+  request['Authorization'] = "Bearer #{credentials['access_token']}"
 
   response = http.request(request)
   content_type :json
   response.body
 end
 
-# Step 5: Refresh tokens when they expire.
+# Step 5: Refresh tokens
 get '/auth/samsara/refresh' do
-  db = get_db
-  result = db.execute('SELECT refresh_token FROM demo').first
-  refresh_token = result['refresh_token']
+  credentials = session[:credentials]
+  return "No refresh token stored" unless credentials
 
   # Exchange the refresh token for new access and refresh tokens
-  auth = Base64.strict_encode64("#{ENV['SAMSARA_CLIENT_ID']}:#{ENV['SAMSARA_CLIENT_SECRET']}")
-  uri = URI('https://api.samsara.com/oauth2/token')
-  http = Net::HTTP.new(uri.host, uri.port)
-  http.use_ssl = true
+  credentials = refresh_tokens(credentials['refresh_token'])
+  session[:credentials] = credentials
 
-  request = Net::HTTP::Post.new(uri)
-  request['Content-Type'] = 'application/x-www-form-urlencoded'
-  request['Authorization'] = "Basic #{auth}"
-  request.body = URI.encode_www_form({
-    refresh_token: refresh_token,
-    grant_type: 'refresh_token',
-    redirect_uri: 'http://localhost:5000/auth/samsara/callback'
-  })
-
-  response = http.request(request)
-  token_data = JSON.parse(response.body)
-
-  db = get_db
-  new_access_token = token_data['access_token']
-  new_refresh_token = token_data['refresh_token']
-  db.execute('UPDATE demo SET access_token = ?, refresh_token = ? WHERE refresh_token = ?', [new_access_token, new_refresh_token, refresh_token])
-
-  "Successfully refreshed access token: #{new_access_token}"
+  redirect '/'
 end
 
 get '/auth/samsara/revoke' do
-  db = get_db
-  result = db.execute('SELECT refresh_token FROM demo').first
-  refresh_token = result['refresh_token']
+  credentials = session[:credentials]
+  return "No token to revoke" unless credentials
 
   auth = Base64.strict_encode64("#{ENV['SAMSARA_CLIENT_ID']}:#{ENV['SAMSARA_CLIENT_SECRET']}")
   uri = URI('https://api.samsara.com/oauth2/revoke')
@@ -157,40 +171,14 @@ get '/auth/samsara/revoke' do
   request['Content-Type'] = 'application/x-www-form-urlencoded'
   request['Authorization'] = "Basic #{auth}"
   request.body = URI.encode_www_form({
-    token: refresh_token
+    token: credentials['refresh_token']
   })
 
   response = http.request(request)
   if response.code == '200'
-    db = get_db
-    db.execute('DELETE FROM demo')
-
-    "Successfully revoked access token"
-  else
-    "Error revoking access token: #{response.body}"
+    # Clear the session
+    session.delete(:credentials)
   end
 
   redirect '/'
 end
-
-# Helper method to get database connection
-def get_db
-  @db ||= SQLite3::Database.new('demo.db')
-  @db.results_as_hash = true
-  @db
-end
-
-# Initialize database schema
-def init_db
-  db = get_db
-  db.execute('DROP TABLE IF EXISTS demo;')
-  db.execute <<-SQL
-    CREATE TABLE IF NOT EXISTS demo (
-      access_token TEXT,
-      refresh_token TEXT
-    );
-  SQL
-end
-
-# Initialize database on startup
-init_db

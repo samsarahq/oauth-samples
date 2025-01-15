@@ -1,21 +1,18 @@
 <?php
 require __DIR__ . '/../../vendor/autoload.php';
+session_start();
 
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../../');
 $dotenv->load();
 
-// Connect to SQLite database
-$db = new SQLite3(__DIR__ . '/../../demo.db');
+// Get refresh token from session
+$credentials = $_SESSION['credentials'] ?? null;
 
-// Get refresh token from database
-$result = $db->query('SELECT refresh_token FROM demo');
-$row = $result->fetchArray(SQLITE3_ASSOC);
-
-if (!$row || !isset($row['refresh_token'])) {
+if (!$credentials || !isset($credentials['refresh_token'])) {
     die('No refresh token found. Please connect to Samsara first.');
 }
 
-$refresh_token = $row['refresh_token'];
+$refresh_token = $credentials['refresh_token'];
 
 // Create authorization header
 $auth = $_ENV['SAMSARA_CLIENT_ID'] . ':' . $_ENV['SAMSARA_CLIENT_SECRET'];
@@ -51,8 +48,8 @@ if (curl_errno($ch)) {
 curl_close($ch);
 
 if ($http_code === 200) {
-    // Delete tokens from database
-    $db->exec('DELETE FROM demo');
+    // Clear credentials from session
+    unset($_SESSION['credentials']);
 
     // Redirect to home page
     header('Location: /');

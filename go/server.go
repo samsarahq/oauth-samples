@@ -1,8 +1,8 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/base64"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,10 +12,9 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gorilla/sessions"
-
-	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/joho/godotenv"
 )
@@ -28,7 +27,8 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	initDB()
+	// Register the map type for session storage
+	gob.Register(map[string]interface{}{})
 
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/auth/samsara", handleAuthorize)
@@ -43,17 +43,14 @@ func main() {
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request) {
-	// Get access token from database
-	db, err := sql.Open("sqlite3", "demo.db")
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
+	session, _ := store.Get(r, "session")
+	credentials := session.Values["credentials"]
+	fmt.Println(session.Values)
 
 	var accessToken string
-	err = db.QueryRow("SELECT access_token FROM demo").Scan(&accessToken)
-	if err != nil {
+	if credentials != nil {
+		accessToken = credentials.(map[string]interface{})["access_token"].(string)
+	} else {
 		accessToken = "No access token stored locally."
 	}
 
@@ -138,6 +135,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	data := url.Values{}
 	data.Set("code", code)
 	data.Set("grant_type", "authorization_code")
+	data.Set("redirect_uri", "http://localhost:5000/auth/samsara/callback")
 
 	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
@@ -175,20 +173,15 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Print tokens
-	// Store tokens in database
-	db, err := sql.Open("sqlite3", "./demo.db")
-	if err != nil {
-		http.Error(w, "Error opening database", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
+	// Store tokens in session
+	session.Values["credentials"] = map[string]interface{}{
+		"access_token":  result.AccessToken,
+		"refresh_token": result.RefreshToken,
+		"expires_at":    time.Now().Unix(), // + int64(result.ExpiresIn),
 
-	_, err = db.Exec("INSERT INTO demo (access_token, refresh_token) VALUES (?, ?)",
-		result.AccessToken, result.RefreshToken)
-	if err != nil {
-		http.Error(w, "Error storing tokens in database", http.StatusInternalServerError)
-		return
+	}
+	if err := session.Save(r, w); err != nil {
+		log.Printf("Error saving session: %v", err)
 	}
 
 	http.Redirect(w, r, "/", http.StatusFound)
@@ -196,20 +189,20 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 
 // Step 4: Use the access token to make an API call
 func handleMe(w http.ResponseWriter, r *http.Request) {
-	// Get access token from database
-	db, err := sql.Open("sqlite3", "./demo.db")
-	if err != nil {
-		http.Error(w, "Error opening database", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
+	session, _ := store.Get(r, "session")
+	credentials := session.Values["credentials"]
 
-	var accessToken string
-	err = db.QueryRow("SELECT access_token FROM demo").Scan(&accessToken)
-	if err != nil {
-		http.Error(w, "Error retrieving access token", http.StatusInternalServerError)
+	if credentials == nil {
+		http.Error(w, "No credentials found", http.StatusUnauthorized)
 		return
 	}
+
+	// If the tokens are expired, refresh them
+	if credentials.(map[string]interface{})["expires_at"].(int64) < time.Now().Unix() {
+		handleRefresh(w, r)
+	}
+
+	accessToken := credentials.(map[string]interface{})["access_token"].(string)
 
 	// Create request
 	client := &http.Client{}
@@ -238,20 +231,15 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 
 // Step 5: Refresh the access token
 func handleRefresh(w http.ResponseWriter, r *http.Request) {
-	// Get refresh token from database
-	db, err := sql.Open("sqlite3", "./demo.db")
-	if err != nil {
-		http.Error(w, "Error opening database", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
+	session, _ := store.Get(r, "session")
+	credentials := session.Values["credentials"]
 
-	var refreshToken string
-	err = db.QueryRow("SELECT refresh_token FROM demo").Scan(&refreshToken)
-	if err != nil {
-		http.Error(w, "Error retrieving refresh token", http.StatusInternalServerError)
+	if credentials == nil {
+		http.Error(w, "No credentials found", http.StatusUnauthorized)
 		return
 	}
+
+	refreshToken := credentials.(map[string]interface{})["refresh_token"].(string)
 
 	// Create auth header
 	auth := os.Getenv("SAMSARA_CLIENT_ID") + ":" + os.Getenv("SAMSARA_CLIENT_SECRET")
@@ -286,18 +274,21 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 	var tokenData struct {
 		AccessToken  string `json:"access_token"`
 		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int    `json:"expires_in"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenData); err != nil {
 		http.Error(w, "Error parsing response", http.StatusInternalServerError)
 		return
 	}
 
-	// Update tokens in database
-	_, err = db.Exec("UPDATE demo SET access_token = ?, refresh_token = ? WHERE refresh_token = ?",
-		tokenData.AccessToken, tokenData.RefreshToken, refreshToken)
-	if err != nil {
-		http.Error(w, "Error updating tokens", http.StatusInternalServerError)
-		return
+	// Update tokens in session
+	session.Values["credentials"] = map[string]interface{}{
+		"access_token":  tokenData.AccessToken,
+		"refresh_token": tokenData.RefreshToken,
+		"expires_at":    time.Now().Unix() + int64(tokenData.ExpiresIn),
+	}
+	if err := session.Save(r, w); err != nil {
+		log.Printf("Error saving session: %v", err)
 	}
 
 	http.Redirect(w, r, "/", http.StatusFound)
@@ -305,29 +296,25 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 
 // Step 6: Revoke the access token
 func handleRevoke(w http.ResponseWriter, r *http.Request) {
-	// Get refresh token from database
-	db, err := sql.Open("sqlite3", "./demo.db")
-	if err != nil {
-		http.Error(w, "Error opening database", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
+	session, _ := store.Get(r, "session")
+	credentials := session.Values["credentials"]
 
-	// Get refresh token from database
-	var refreshToken string
-	err = db.QueryRow("SELECT refresh_token FROM demo").Scan(&refreshToken)
-	if err != nil {
-		http.Error(w, "Error retrieving refresh token", http.StatusInternalServerError)
+	if credentials == nil {
+		http.Error(w, "No credentials found", http.StatusUnauthorized)
 		return
 	}
+
+	refreshToken := credentials.(map[string]interface{})["refresh_token"].(string)
 
 	// Create auth header
 	auth := os.Getenv("SAMSARA_CLIENT_ID") + ":" + os.Getenv("SAMSARA_CLIENT_SECRET")
 	basicAuth := base64.StdEncoding.EncodeToString([]byte(auth))
 
-	// Create request
+	// Create request with refresh token in body
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", "https://api.samsara.com/oauth2/revoke", nil)
+	data := url.Values{}
+	data.Set("token", refreshToken)
+	req, err := http.NewRequest("POST", "https://api.samsara.com/oauth2/revoke", strings.NewReader(data.Encode()))
 	if err != nil {
 		http.Error(w, "Error creating request", http.StatusInternalServerError)
 		return
@@ -345,40 +332,11 @@ func handleRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if resp.StatusCode == http.StatusOK {
-		_, err = db.Exec("DELETE FROM demo")
-		if err != nil {
-			http.Error(w, "Error deleting tokens from database", http.StatusInternalServerError)
-			return
-		}
+		delete(session.Values, "credentials")
+		session.Save(r, w)
 	}
 
 	defer resp.Body.Close()
 
 	http.Redirect(w, r, "/", http.StatusFound)
-}
-
-// Initialize database schema
-func initDB() {
-	db, err := sql.Open("sqlite3", "./demo.db")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-
-	// Drop existing table if it exists
-	_, err = db.Exec("DROP TABLE IF EXISTS demo")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Create new table
-	_, err = db.Exec(`
-		CREATE TABLE demo (
-			access_token TEXT,
-			refresh_token TEXT
-		)
-	`)
-	if err != nil {
-		log.Fatal(err)
-	}
 }

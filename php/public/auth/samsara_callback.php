@@ -61,14 +61,15 @@ curl_close($ch);
 $token_data = json_decode($response, true);
 
 if (isset($token_data['access_token']) && isset($token_data['refresh_token'])) {
-    // Connect to SQLite database
-    $db = new SQLite3(__DIR__ . '/../../demo.db');
+    // Calculate expires_at timestamp
+    $expires_at = time() + $token_data['expires_in'];
 
-    // Store tokens in database
-    $stmt = $db->prepare('INSERT OR REPLACE INTO demo (access_token, refresh_token) VALUES (:access_token, :refresh_token)');
-    $stmt->bindValue(':access_token', $token_data['access_token'], SQLITE3_TEXT);
-    $stmt->bindValue(':refresh_token', $token_data['refresh_token'], SQLITE3_TEXT);
-    $stmt->execute();
+    // Store credentials in session
+    $_SESSION['credentials'] = [
+        'access_token' => $token_data['access_token'],
+        'refresh_token' => $token_data['refresh_token'],
+        'expires_at' => $expires_at
+    ];
 
     // Redirect to home page on success
     header('Location: /');

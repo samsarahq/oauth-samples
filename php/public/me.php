@@ -3,21 +3,24 @@ require __DIR__ . '/../vendor/autoload.php';
 
 error_log('me.php called');
 
-// Connect to SQLite database
-$db = new SQLite3(__DIR__ . '/../demo.db');
+session_start();
 
-// Get access token from database
-$result = $db->query('SELECT access_token FROM demo');
-$row = $result->fetchArray(SQLITE3_ASSOC);
+// Get credentials from session
+$credentials = $_SESSION['credentials'] ?? null;
 
-if (!$row || !isset($row['access_token'])) {
+if (!$credentials || !isset($credentials['access_token'])) {
     die('No access token found. Please connect to Samsara first.');
 }
 
-$access_token = $row['access_token'];
-error_log('Access token: ' . $access_token);
+$access_token = $credentials['access_token'];
 
-// Initialize cURL session
+// Check if token is expired and refresh if necessary
+// if (isset($credentials['expires_at']) && $credentials['expires_at'] < time()) {
+//     // Token is expired, redirect to refresh endpoint
+//     header('Location: /auth/samsara_refresh.php');
+//     exit();
+// }
+
 $ch = curl_init();
 
 // Set cURL options

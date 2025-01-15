@@ -1,8 +1,6 @@
 const express = require("express");
 const session = require("express-session");
 const crypto = require("crypto");
-const sqlite3 = require("sqlite3").verbose();
-const db = new sqlite3.Database("demo.db");
 
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
@@ -24,15 +22,40 @@ app.use(
 const SAMSARA_CLIENT_ID = process.env.SAMSARA_CLIENT_ID;
 const SAMSARA_CLIENT_SECRET = process.env.SAMSARA_CLIENT_SECRET;
 
-app.get("/", async (req, res) => {
-  let accessToken = "No access token stored locally.";
-  const credentials = await getCredentials();
+async function refreshTokens(refreshToken) {
+  const auth = Buffer.from(
+    `${SAMSARA_CLIENT_ID}:${SAMSARA_CLIENT_SECRET}`
+  ).toString("base64");
 
-  if (!credentials) {
-    accessToken = "No access token stored locally.";
-  } else {
-    accessToken = credentials.access_token;
-  }
+  const response = await fetch("https://api.samsara.com/oauth2/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${auth}`,
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  });
+
+  const tokenData = await response.json();
+
+  // Calculate new expires_at timestamp
+  const expiresAt = Math.floor(Date.now() / 1000) + tokenData.expires_in;
+
+  // return new credentials
+  return {
+    access_token: tokenData.access_token,
+    refresh_token: tokenData.refresh_token,
+    expires_at: expiresAt,
+  };
+}
+
+app.get("/", async (req, res) => {
+  const credentials = req.session.credentials || {};
+  const accessToken =
+    credentials.access_token || "No access token stored locally.";
 
   res.send(`
       <html>
@@ -63,9 +86,7 @@ app.get("/auth/samsara", (req, res) => {
     state: state,
   });
 
-  const redirectUrl = `https://api.samsara.com/oauth2/authorize?${params.toString()}`;
-
-  res.redirect(redirectUrl);
+  res.redirect(`https://api.samsara.com/oauth2/authorize?${params.toString()}`);
 });
 
 // Step 2: Handle the callback from Samsara's OAuth 2.0 authorization flow
@@ -78,7 +99,6 @@ app.get("/auth/samsara/callback", async (req, res) => {
     return res.status(400).send("Invalid state parameter");
   }
 
-  // Clear state from session
   delete req.session.oauth_state;
 
   if (code) {
@@ -88,7 +108,6 @@ app.get("/auth/samsara/callback", async (req, res) => {
         `${SAMSARA_CLIENT_ID}:${SAMSARA_CLIENT_SECRET}`
       ).toString("base64");
 
-      // Step 3: Exchange authorization code for access token
       const response = await fetch("https://api.samsara.com/oauth2/token", {
         method: "POST",
         headers: {
@@ -107,12 +126,15 @@ app.get("/auth/samsara/callback", async (req, res) => {
 
       const tokenData = await response.json();
 
-      // Store tokens in database
-      const stmt = db.prepare(
-        "INSERT INTO demo (access_token, refresh_token) VALUES (?, ?)"
-      );
-      stmt.run(tokenData.access_token, tokenData.refresh_token);
-      stmt.finalize();
+      // Calculate expires_at timestamp
+      const expiresAt = Math.floor(Date.now() / 1000) + tokenData.expires_in;
+
+      // Store in session
+      req.session.credentials = {
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_at: Date.now() / 1000, // expiresAt,
+      };
 
       return res.redirect("/");
     } catch (error) {
@@ -129,20 +151,27 @@ app.get("/auth/samsara/callback", async (req, res) => {
       .status(400)
       .send(`Authorization failed: ${error} - ${errorDescription}`);
   }
+
+  return res.status(400).send(`Authorization failed: ${req.query.error}`);
 });
 
 // Step 4: Use the access token to make an API call
 app.get("/me", async (req, res) => {
-  const credentials = await getCredentials();
+  let credentials = req.session.credentials;
   if (!credentials) {
     return res.status(400).send("No access token stored locally.");
   }
 
-  const accessToken = credentials.access_token;
+  // Check if access token is expired and refresh if needed
+  if (credentials.expires_at < Math.floor(Date.now() / 1000)) {
+    // Use updated credentials
+    req.session.credentials = await refreshTokens(credentials.refresh_token);
+    credentials = req.session.credentials;
+  }
 
   const response = await fetch("https://api.samsara.com/me", {
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${credentials.access_token}`,
       "Content-Type": "application/json",
     },
   });
@@ -152,50 +181,23 @@ app.get("/me", async (req, res) => {
 
 // Step 5: Refresh the access token
 app.get("/auth/samsara/refresh", async (req, res) => {
-  const credentials = await getCredentials();
+  const credentials = req.session.credentials;
   if (!credentials) {
-    return res.status(400).send("No access token stored locally.");
+    return res.status(400).send("No credentials stored.");
   }
 
-  const refreshToken = credentials.refresh_token;
-
-  const auth = Buffer.from(
-    `${SAMSARA_CLIENT_ID}:${SAMSARA_CLIENT_SECRET}`
-  ).toString("base64");
-
-  const response = await fetch("https://api.samsara.com/oauth2/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${auth}`,
-    },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-    }),
-  });
-
-  const tokenData = await response.json();
-  const newAccessToken = tokenData.access_token;
-  const newRefreshToken = tokenData.refresh_token;
-
-  const stmt = db.prepare(
-    "UPDATE demo SET access_token = ?, refresh_token = ? WHERE refresh_token = ?"
-  );
-  stmt.run(newAccessToken, newRefreshToken, refreshToken);
-  stmt.finalize();
+  // Update session
+  req.session.credentials = await refreshTokens(credentials.refresh_token);
 
   return res.redirect("/");
 });
 
 // Revoke the access token
 app.get("/auth/samsara/revoke", async (req, res) => {
-  const credentials = await getCredentials();
+  const credentials = req.session.credentials;
   if (!credentials) {
-    return res.status(400).send("No access token stored locally.");
+    return res.status(400).send("No credentials stored.");
   }
-
-  const refreshToken = credentials.refresh_token;
 
   const auth = Buffer.from(
     `${SAMSARA_CLIENT_ID}:${SAMSARA_CLIENT_SECRET}`
@@ -208,43 +210,17 @@ app.get("/auth/samsara/revoke", async (req, res) => {
       Authorization: `Basic ${auth}`,
     },
     body: new URLSearchParams({
-      token: refreshToken,
+      token: credentials.refresh_token,
     }),
   });
 
   if (response.ok) {
-    const stmt = db.prepare("DELETE FROM demo");
-    stmt.run();
-    stmt.finalize();
+    // Clear session
+    delete req.session.credentials;
   }
 
   return res.redirect("/");
 });
-
-// Initialize database schema
-db.serialize(() => {
-  // Drop existing table if it exists
-  db.run("DROP TABLE IF EXISTS demo");
-
-  // Create new table
-  db.run(`
-    CREATE TABLE demo (
-      access_token TEXT,
-      refresh_token TEXT
-    )
-  `);
-});
-
-const getCredentials = async () => {
-  return new Promise((resolve, reject) => {
-    db.get("SELECT access_token, refresh_token FROM demo", (err, row) => {
-      if (err) {
-        return reject(err);
-      }
-      resolve(row);
-    });
-  });
-};
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

@@ -1,21 +1,18 @@
 <?php
 require __DIR__ . '/../../vendor/autoload.php';
+session_start();
 
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../../');
 $dotenv->load();
 
-// Connect to SQLite database
-$db = new SQLite3(__DIR__ . '/../../demo.db');
+// Get refresh token from session
+$credentials = $_SESSION['credentials'] ?? null;
 
-// Get refresh token from database
-$result = $db->query('SELECT refresh_token FROM demo');
-$row = $result->fetchArray(SQLITE3_ASSOC);
-
-if (!$row || !isset($row['refresh_token'])) {
+if (!$credentials || !isset($credentials['refresh_token'])) {
     die('No refresh token found. Please connect to Samsara first.');
 }
 
-$refresh_token = $row['refresh_token'];
+$refresh_token = $credentials['refresh_token'];
 
 // Create authorization header
 $auth = $_ENV['SAMSARA_CLIENT_ID'] . ':' . $_ENV['SAMSARA_CLIENT_SECRET'];
@@ -55,11 +52,15 @@ if (!isset($token_data['access_token']) || !isset($token_data['refresh_token']))
     die('Invalid response from token endpoint');
 }
 
-// Store new tokens in database
-$stmt = $db->prepare('UPDATE demo SET access_token = :access_token, refresh_token = :refresh_token');
-$stmt->bindValue(':access_token', $token_data['access_token'], SQLITE3_TEXT);
-$stmt->bindValue(':refresh_token', $token_data['refresh_token'], SQLITE3_TEXT);
-$stmt->execute();
+// Calculate expires_at timestamp
+$expires_at = time() + $token_data['expires_in'];
+
+// Store new tokens in session
+$_SESSION['credentials'] = [
+    'access_token' => $token_data['access_token'],
+    'refresh_token' => $token_data['refresh_token'],
+    'expires_at' => $expires_at
+];
 
 // Redirect back to home page
 header('Location: /');

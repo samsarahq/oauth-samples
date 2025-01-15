@@ -34,7 +34,7 @@ pip install -r requirements.txt
 4. Run the application:
 
 ```sh
-python app.py
+python server.py
 ```
 
 5. Navigate to [`http://localhost:5000`](http://localhost:5000) in your browser to see the application in action.

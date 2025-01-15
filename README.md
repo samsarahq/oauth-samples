@@ -41,6 +41,7 @@ Each example has its own README file with instructions for installing dependenci
 - [Ruby](ruby/README.md)
 - [.NET](dotnet/README.md)
 - [Java](java/README.md)
+- [PHP](php/README.md)
 
 ## Support
 

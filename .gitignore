@@ -11,3 +11,5 @@ __pycache__/
 **/.byebug_history
 
 target/
+**/vendor/**
+**/composer.lock

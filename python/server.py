@@ -51,8 +51,6 @@ def refresh_access_token(refresh_token):
 
 @app.get('/')
 def home():
-    print(session)
-
     # Get the access token and expiration timestamp from the session
     credentials = session.get('credentials', {})
     access_token = credentials.get('access_token', "No access token stored locally.")

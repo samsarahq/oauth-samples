@@ -151,8 +151,6 @@ app.get("/auth/samsara/callback", async (req, res) => {
       .status(400)
       .send(`Authorization failed: ${error} - ${errorDescription}`);
   }
-
-  return res.status(400).send(`Authorization failed: ${req.query.error}`);
 });
 
 // Step 4: Use the access token to make an API call

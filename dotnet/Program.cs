@@ -213,8 +213,8 @@ app.MapGet("/auth/samsara/refresh", async context =>
     var refreshToken = credentialsObj["refresh_token"];
 
     var refreshedCredentials = await RefreshAccessTokenAsync(refreshToken, clientId, clientSecret);
-
     context.Session.SetString("credentials", System.Text.Json.JsonSerializer.Serialize(refreshedCredentials));
+
     context.Response.Redirect("/");
 });
 

@@ -84,7 +84,9 @@ get '/auth/samsara/callback' do
 
   # Exchange authorization code for access token
   if params[:code]
-    auth = Base64.strict_encode64("#{ENV['SAMSARA_CLIENT_ID']}:#{ENV['SAMSARA_CLIENT_SECRET']}")
+    client_id = ENV['SAMSARA_CLIENT_ID']
+    client_secret = ENV['SAMSARA_CLIENT_SECRET']
+    auth = Base64.strict_encode64("#{client_id}:#{client_secret}")
 
     uri = URI('https://api.samsara.com/oauth2/token')
     http = Net::HTTP.new(uri.host, uri.port)
@@ -102,14 +104,17 @@ get '/auth/samsara/callback' do
 
     if response.code == '200'
       token_data = JSON.parse(response.body)
+      access_token = token_data['access_token']
+      refresh_token = token_data['refresh_token']
+      expires_in = token_data['expires_in']
 
       # Calculate expires_at timestamp
-      expires_at = Time.now.to_i + token_data['expires_in'].to_i
+      expires_at = Time.now.to_i + expires_in
 
       # Store credentials in session
       session[:credentials] = {
-        'access_token' => token_data['access_token'],
-        'refresh_token' => token_data['refresh_token'],
+        'access_token' => access_token,
+        'refresh_token' => refresh_token,
         'expires_at' => expires_at
       }
 
@@ -161,8 +166,9 @@ end
 get '/auth/samsara/revoke' do
   credentials = session[:credentials]
   return "No token to revoke" unless credentials
-
-  auth = Base64.strict_encode64("#{ENV['SAMSARA_CLIENT_ID']}:#{ENV['SAMSARA_CLIENT_SECRET']}")
+  client_id = ENV['SAMSARA_CLIENT_ID']
+  client_secret = ENV['SAMSARA_CLIENT_SECRET']
+  auth = Base64.strict_encode64("#{client_id}:#{client_secret}")
   uri = URI('https://api.samsara.com/oauth2/revoke')
   http = Net::HTTP.new(uri.host, uri.port)
   http.use_ssl = true

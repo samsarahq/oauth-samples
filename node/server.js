@@ -133,7 +133,7 @@ app.get("/auth/samsara/callback", async (req, res) => {
       req.session.credentials = {
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
-        expires_at: Date.now() / 1000, // expiresAt,
+        expires_at: expiresAt,
       };
 
       return res.redirect("/");

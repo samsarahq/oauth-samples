@@ -81,14 +81,13 @@ public class Server {
 
       // Create HTTP client
       HttpClient client = HttpClient.newHttpClient();
-      String redirectUri = "http://localhost:5000/auth/samsara/callback";
       String requestBody =
-          String.format("grant_type=authorization_code&code=%s&redirect_uri=%s",
-                        code, redirectUri);
+          String.format("grant_type=authorization_code&code=%s", code);
 
-      String credentials = dotenv.get("SAMSARA_CLIENT_ID") + ":" +
-                           dotenv.get("SAMSARA_CLIENT_SECRET");
-      String auth = Base64.getEncoder().encodeToString(credentials.getBytes());
+      String clientId = dotenv.get("SAMSARA_CLIENT_ID");
+      String clientSecret = dotenv.get("SAMSARA_CLIENT_SECRET");
+      String auth = Base64.getEncoder().encodeToString(
+          (clientId + ":" + clientSecret).getBytes());
 
       // Step 3: Exchange the authorization code for access and refresh tokens
       HttpRequest request =
@@ -113,7 +112,7 @@ public class Server {
         String accessToken = tokens.get("access_token").getAsString();
         String refreshToken = tokens.get("refresh_token").getAsString();
         long expiresIn = tokens.get("expires_in").getAsLong();
-        long expiresAt = System.currentTimeMillis() / 1000; // + expiresIn;
+        long expiresAt = System.currentTimeMillis() / 1000 + expiresIn;
 
         // Store tokens in session
         JsonObject credentialsObj = new JsonObject();
@@ -218,8 +217,10 @@ public class Server {
       HttpClient client = HttpClient.newHttpClient();
 
       // Create auth header
-      String auth = dotenv.get("SAMSARA_CLIENT_ID") + ":" +
-                    dotenv.get("SAMSARA_CLIENT_SECRET");
+      String clientId = dotenv.get("SAMSARA_CLIENT_ID");
+      String clientSecret = dotenv.get("SAMSARA_CLIENT_SECRET");
+
+      String auth = clientId + ":" + clientSecret;
       String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
 
       // Build request body

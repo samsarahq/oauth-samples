@@ -43,7 +43,6 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
     'grant_type' => 'authorization_code',
     'code' => $code,
-    'redirect_uri' => 'http://localhost:5000/auth/samsara_callback.php'
 ]));
 
 // Execute request

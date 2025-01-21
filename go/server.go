@@ -45,7 +45,6 @@ func main() {
 func handleHome(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
 	credentials := session.Values["credentials"]
-	fmt.Println(session.Values)
 
 	var accessToken string
 	if credentials != nil {
@@ -120,8 +119,6 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	delete(session.Values, "state")
 	session.Save(r, w)
 
-	fmt.Printf("State: %s\n", state)
-
 	if code == "" {
 		http.Error(w, "Missing authorization code", http.StatusBadRequest)
 		return
@@ -147,7 +144,9 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	// Add basic auth header
-	auth := os.Getenv("SAMSARA_CLIENT_ID") + ":" + os.Getenv("SAMSARA_CLIENT_SECRET")
+	clientId := os.Getenv("SAMSARA_CLIENT_ID")
+	clientSecret := os.Getenv("SAMSARA_CLIENT_SECRET")
+	auth := clientId + ":" + clientSecret
 	basicAuth := base64.StdEncoding.EncodeToString([]byte(auth))
 	req.Header.Add("Authorization", "Basic "+basicAuth)
 
@@ -177,8 +176,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	session.Values["credentials"] = map[string]interface{}{
 		"access_token":  result.AccessToken,
 		"refresh_token": result.RefreshToken,
-		"expires_at":    time.Now().Unix(), // + int64(result.ExpiresIn),
-
+		"expires_at":    time.Now().Unix() + int64(result.ExpiresIn),
 	}
 	if err := session.Save(r, w); err != nil {
 		log.Printf("Error saving session: %v", err)
@@ -204,7 +202,6 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 
 	accessToken := credentials.(map[string]interface{})["access_token"].(string)
 
-	// Create request
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", "https://api.samsara.com/me", nil)
 	if err != nil {
@@ -287,9 +284,7 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 		"refresh_token": tokenData.RefreshToken,
 		"expires_at":    time.Now().Unix() + int64(tokenData.ExpiresIn),
 	}
-	if err := session.Save(r, w); err != nil {
-		log.Printf("Error saving session: %v", err)
-	}
+	session.Save(r, w)
 
 	http.Redirect(w, r, "/", http.StatusFound)
 }

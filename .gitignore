@@ -1,9 +1,15 @@
 .env
 **/.env
 __pycache__/
-*.pyc 
+*.pyc
 **/venv/**
 **/node_modules/**
 
 **/obj/**
 **/bin/**
+**/**.db
+**/.byebug_history
+
+target/
+**/vendor/**
+**/composer.lock

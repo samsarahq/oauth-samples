@@ -1,13 +1,19 @@
+import { cookies } from "next/headers";
+
 export default function Home() {
+  const credentials = JSON.parse(cookies().get("credentials")?.value || "{}");
+  console.log({ credentials });
+  const accessToken = credentials?.access_token;
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-8">
-      <h1 className="text-3xl font-bold mb-8">Welcome</h1>
-      <a
-        href="/authorize"
-        className="rounded-full bg-foreground text-background px-6 py-3 hover:bg-[#383838] transition-colors"
-      >
-        Connect to Samsara
-      </a>
+    <div>
+      <a href="/auth/samsara">Connect to Samsara</a>
+      <p>Access Token: {accessToken}</p>
+      <a href="/me">Test API Call</a>
+      <br />
+      <a href="/auth/samsara/refresh">Refresh Access Token</a>
+      <br />
+      <a href="/auth/samsara/revoke">Revoke Access Token</a>
+      <br />
     </div>
   );
 }
